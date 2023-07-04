@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+from typing import Optional, List, Dict, Any
 from tortoise.models import Model
 from tortoise import fields, validators, exceptions
 from enum import IntEnum
@@ -96,6 +97,46 @@ class User(Model):
     token = fields.CharField(unique=True, max_length=MAX_TOKEN_LENGTH, default=generate_auth_token)
     flags = fields.IntField(default=0)
 
+    def to_dict(
+            self,
+            *,
+            exclude: Optional[List[str]] = None,
+            exclude_sensitive: bool = True,
+        ) -> Dict[str, Any]:
+        """Serializes the model to dictionary.
+
+        All values in dictionary wold have JSON serializable values. If
+        exclude_sensitive is set to True (default), sensitive credentials
+        are omitted from the output dictionary.
+        """
+        out = {
+            'id': self.id,
+            'username': self.username,
+            'display_name': self.display_name,
+            'bio': self.bio,
+            'email': self.email,
+            'password': self.password,
+            'token': self.token,
+            'flags': self.flags,
+        }
+
+        if exclude is None:
+            exclude = []
+        else:
+            # In some cases, we might need the original list apart from
+            # this to_dict method and since we might be updating the list
+            # later, it is sensible to copy it instead to avoid messing with
+            # the original list.
+            exclude = exclude.copy()
+
+        if exclude_sensitive:
+            exclude.extend(['email', 'password', 'token'])
+
+        for key in exclude:
+            out.pop(key, None)
+
+        return out
+
 
 class RelationshipType(IntEnum):
     """The type of relationship between two users.
@@ -133,3 +174,24 @@ class Relationship(Model):
     def is_friend(self) -> bool:
         """Indicates whether the relationship is among friends."""
         return self.type in (RelationshipType.FRIEND, RelationshipType.FAVORITE_FRIEND)
+
+    def to_dict(
+            self,
+            *,
+            exclude: Optional[List[str]] = None,
+        ) -> Dict[str, Any]:
+        """Serializes the user model to dictionary.
+
+        All values in dictionary wold have JSON serializable values.
+        """
+        out = {
+            'user_id': self.user.id,
+            'recipient_id': self.recipient.id,
+            'type': self.type.value,
+        }
+
+        if exclude:
+            for key in exclude:
+                out.pop(key, None)
+
+        return out

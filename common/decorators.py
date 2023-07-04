@@ -22,36 +22,40 @@
 
 from __future__ import annotations
 
-from quart import Quart
+from typing import Callable, Any
+from functools import wraps
+from quart import request, g as state
 from common.exceptions import HTTPException
-from common import utils
-from tortoise.contrib.quart import register_tortoise
-
-import blueprints
+from models.users import User
 
 __all__ = (
-    'app',
+    'require_authorization',
 )
 
-app = Quart(__name__)
-app.register_blueprint(blueprints.users)
 
-register_tortoise(
-    app,
-    db_url='sqlite://db.sqlite3',
-    modules={'models': ['models']},
-    generate_schemas=True,
-)
+def require_authorization() -> Callable[[Callable[..., Any]], Any]:
+    """Ensures that only authorized requests can access a route.
 
-@app.route('/')
-async def index():
-    return {"message": "Welcome to Lapis API"}
+    When `token_only` is True (default), only `Bearer` token requests
+    are accepted and vice versa.
+    """
+    def predicate(view: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(view)
+        async def __decorator(*args: Any, **kwargs: Any):
+            header = request.headers.get('Authorization')
+            if header is None:
+                raise HTTPException(401, 'Unauthorized')
 
-@app.errorhandler(HTTPException)  # type: ignore
-async def handle_http_exception(exc: HTTPException):
-    return exc.to_dict(), exc.status_code
+            scheme, _, value = header.partition(' ')
+            if scheme.lower() == 'bearer':
+                user = await User.filter(token=value.strip()).first()
+                if user:
+                    state.user = user
+                else:
+                    raise HTTPException(401, 'Invalid authorization token')
+            else:
+                raise HTTPException(401, 'Authorization scheme must be Bearer')
 
-if __name__ == '__main__':
-    port = utils.get_env_var('LAPIS_PORT', 8000, integer=True)
-    debug = utils.get_env_var('LAPIS_DEBUG', False, boolean=True)
-    app.run(debug=debug, port=port)
+        return __decorator
+
+    return predicate

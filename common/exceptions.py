@@ -22,36 +22,43 @@
 
 from __future__ import annotations
 
-from quart import Quart
-from common.exceptions import HTTPException
-from common import utils
-from tortoise.contrib.quart import register_tortoise
-
-import blueprints
+from typing import Optional, Dict, Any
 
 __all__ = (
-    'app',
+    'HTTPException',
 )
 
-app = Quart(__name__)
-app.register_blueprint(blueprints.users)
 
-register_tortoise(
-    app,
-    db_url='sqlite://db.sqlite3',
-    modules={'models': ['models']},
-    generate_schemas=True,
-)
+class HTTPException(Exception):
+    """Base class for all HTTP exceptions.
+    
+    These exceptions are properly handled and propagated as reponse when
+    raised in a request view context.
+    
+    Attributes
+    ----------
+    status_code: :class:`int`
+        The HTTP status code.
+    message: :class:`str`
+        The error message.
+    hint: Optional[:class:`str`]
+        The optional hint, if any.
+    """
+    def __init__(self, status_code: int, message: str, hint: Optional[str] = None) -> None:
+        self.status_code = status_code
+        self.message = message
+        self.hint = hint
 
-@app.route('/')
-async def index():
-    return {"message": "Welcome to Lapis API"}
+        super().__init__(message)
 
-@app.errorhandler(HTTPException)  # type: ignore
-async def handle_http_exception(exc: HTTPException):
-    return exc.to_dict(), exc.status_code
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns the dictionary for the exception."""
+        ret = {
+            "error": True,
+            "message": self.message
+        }
 
-if __name__ == '__main__':
-    port = utils.get_env_var('LAPIS_PORT', 8000, integer=True)
-    debug = utils.get_env_var('LAPIS_DEBUG', False, boolean=True)
-    app.run(debug=debug, port=port)
+        if self.hint is not None:
+            ret["hint"] = self.hint
+
+        return ret
