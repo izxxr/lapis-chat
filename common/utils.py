@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Union, TYPE_CHECKING
 from tortoise.fields import Field
+from common.constants import ERROR_CODES
 
 import os
 import base64
@@ -113,3 +114,11 @@ def generate_auth_token() -> str:
     """Generates an authorization token."""
     randomness = str(uuid.uuid4()).encode()
     return base64.b64encode(randomness).decode()
+
+
+def get_error_code(name: str, default: str = 'UNSPECIFIED_ERROR') -> int:
+    """Gets error code for given error."""
+    code = ERROR_CODES.get(name)
+    if code is None:
+        code = ERROR_CODES.get(default, -1)
+    return code

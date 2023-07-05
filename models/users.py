@@ -27,8 +27,8 @@ from tortoise.models import Model
 from tortoise import fields, validators, exceptions
 from enum import IntEnum
 from schemas.users import RelationshipType
-from common.schemas_models import password_validator_models
-from common.utils import generate_auth_token
+from common.schemas_models import password_validator, dob_validator
+from common.utils import generate_auth_token, get_ulid_id
 from common.constants import (
     ULID_LENGTH,
     MAX_USERNAME_LENGTH,
@@ -42,6 +42,8 @@ from common.constants import (
     TOKEN_LENGTH,
 )
 
+import datetime
+
 __all__ = (
     'User',
     'Relationship',
@@ -51,12 +53,14 @@ __all__ = (
 class User(Model):
     """Represents a user entity.
 
-    For details on attributes, see the documentation of `schemas.User`.
+    For details on attributes, see the documentation of `schemas.User`
+    or `schemas.AuthorizedUser`.
     """
     id = fields.CharField(
         pk=True,
         max_length=ULID_LENGTH,
         validators=[validators.MinLengthValidator(ULID_LENGTH)],
+        default=get_ulid_id,
     )
     username = fields.CharField(
         unique=True,
@@ -75,10 +79,11 @@ class User(Model):
     )
     password = fields.CharField(
         max_length=MAX_PASSWORD_LENGTH,
-        validators=[password_validator_models],
+        validators=[password_validator],
     )
     token = fields.CharField(unique=True, max_length=TOKEN_LENGTH, default=generate_auth_token)
     flags = fields.IntField(default=0)
+    dob = fields.DateField(default=datetime.date.today, validators=[dob_validator])
 
     def to_dict(
             self,
@@ -101,6 +106,7 @@ class User(Model):
             'password': self.password,
             'token': self.token,
             'flags': self.flags,
+            'dob': self.dob.isoformat()
         }
 
         if exclude is None:
@@ -113,7 +119,7 @@ class User(Model):
             exclude = exclude.copy()
 
         if exclude_sensitive:
-            exclude.extend(['email', 'password', 'token'])
+            exclude.extend(['email', 'password', 'token', 'dob'])
 
         for key in exclude:
             out.pop(key, None)

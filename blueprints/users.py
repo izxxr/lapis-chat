@@ -22,10 +22,14 @@
 
 from __future__ import annotations
 
+from typing import Dict, Any
 from quart import Blueprint, request, g as state
 from common.exceptions import HTTPException
 from common.decorators import require_authorization
-from models.users import User
+from common import utils
+
+import models
+import schemas
 
 __all__ = (
     'users',
@@ -52,21 +56,18 @@ async def login():
     Returns
     -------
     200: User object
-    400: Missing required query parameters
+    400: Invalid query parameters
     401: Invalid email or password
     """
-    email = request.args.get('email')
-    password = request.args.get('password')
+    schema = schemas.LoginQueryParams()
+    params: Dict[str, Any] = schema.load(dict(request.args))  # type: ignore
 
-    if not email or not password:
-        raise HTTPException(400, 'Both "email" and "password" query parameters are required.')
-
-    user = await User.filter(email=email.lower(), password=password).first()
+    user = await models.User.filter(email=params['email'], password=params['password']).first()
 
     if user is None:
         raise HTTPException(401, 'Invalid email or password.')
 
-    return user.to_dict()
+    return user.to_dict(exclude_sensitive=False)
 
 
 @_self.get('/')
@@ -76,4 +77,50 @@ async def get_self():
 
     Returns user object on success.
     """
-    return state.user
+    return state.user.to_dict(exclude_sensitive=False)
+
+
+@_self.post('/')
+async def create_user():
+    """Create a user account.
+
+    Returns 201 Created on success.
+    """
+    schema = schemas.CreateUserJSON()
+    data = await request.get_json(silent=True) or {}
+    json: Dict[str, Any] = schema.load(data)  # type: ignore
+
+    if await models.User.exists(email=json['email']):
+        raise HTTPException(
+            409,
+            'This email is already registered by another account.',
+            hint='Try logging in if you already have an account.',
+            error_code=utils.get_error_code('EMAIL_REGISTERED'),
+        )
+    
+    if await models.User.exists(username=json['username']):
+        raise HTTPException(
+            409,
+            'This username is taken.',
+            error_code=utils.get_error_code('USERNAME_TAKEN'),
+        )
+
+    await models.User.create(
+        email=json['email'],
+        password=json['password'],
+        username=json['username'],
+        display_name=json['display_name'],
+        dob=json['dob'],
+    )
+    return ('', 201)
+
+
+@_self.delete('/')
+@require_authorization()
+async def delete_self():
+    """Delete the user account.
+
+    Returns 204 No Content on success.
+    """
+    await state.user.delete()
+    return ('', 204)

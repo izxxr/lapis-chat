@@ -22,19 +22,24 @@
 
 from __future__ import annotations
 
-from typing import Type
-from marshmallow import ValidationError as ValidationErrorMarshmallow
-from tortoise.exceptions import ValidationError as ValidationErrorTortoise
-from common.constants import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
-
-import string
-
-__all__ = (
-    'password_validator_models',
-    'password_validator_schemas',
+from typing import Type, Union
+from common import utils
+from common.exceptions import ValidationError
+from common.constants import (
+    MAX_PASSWORD_LENGTH,
+    MIN_PASSWORD_LENGTH,
+    MIN_ALLOWED_AGE,
 )
 
-def _password_validator_impl(value: str, exception_cls: Type[Exception]) -> bool:
+import string
+import datetime
+
+__all__ = (
+    'password_validator',
+    'dob_validator',
+)
+
+def password_validator(value: str) -> bool:
     """A validator that ensures the strongness of a password.
 
     Conditions for a password to be valid:
@@ -56,14 +61,25 @@ def _password_validator_impl(value: str, exception_cls: Type[Exception]) -> bool
             error = 'Password must contain at least one letter and one digit.'
 
     if error:
-        raise exception_cls(error)
+        raise ValidationError(error, error_code=utils.get_error_code('PASSWORD_INVALID'))
 
     return True
 
-def password_validator_models(value: str) -> bool:
-    """Validates a password. This validator is for tortoise models."""
-    return _password_validator_impl(value, ValidationErrorTortoise)
+def dob_validator(value: Union[datetime.date, str]) -> bool:
+    """A validator that ensures the minimum age requirement of 13 years."""
+    if isinstance(value, str):
+        try:
+            value = datetime.date.fromisoformat(value)
+        except ValueError:
+            raise ValidationError('Must be in valid ISO format')
 
-def password_validator_schemas(value: str) -> bool:
-    """Validates a password. This validator is for marshmallow schemas."""
-    return _password_validator_impl(value, ValidationErrorMarshmallow)
+    age = datetime.date.today() - value
+    years = age.days // 365
+
+    if years < MIN_ALLOWED_AGE:
+        raise ValidationError(
+            f'User must be at least be {MIN_ALLOWED_AGE} years of age to create an account.',
+            error_code=utils.get_error_code('UNDERAGE'),
+        )
+
+    return True

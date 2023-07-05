@@ -32,6 +32,22 @@ MIN_EMAIL_ADDRESS_LENGTH = 3
 MAX_PASSWORD_LENGTH = 200
 MIN_PASSWORD_LENGTH = 8
 TOKEN_LENGTH = 48
+MIN_ALLOWED_AGE = 13
 
 # Internal Constants
 ULID_LENGTH = 26
+
+# Error codes
+ERROR_CODES = {
+    # Unspecified (-1)
+    'UNSPECIFIED_ERROR': -1,
+    
+    # Generic (1000-1999)
+    'VALIDATION_ERROR': 1000,
+    
+    # User Account (2000-2999)
+    'UNDERAGE': 2000,
+    'USERNAME_TAKEN': 2001,
+    'EMAIL_REGISTERED': 2002,
+    'PASSWORD_INVALID': 2003,
+}

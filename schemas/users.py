@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from marshmallow import Schema, fields, validate
 from schemas.fields import ULIDField, EnumField
-from common.schemas_models import password_validator_schemas
+from common.schemas_models import password_validator
 from common.constants import (
     MAX_USERNAME_LENGTH,
     MIN_USERNAME_LENGTH,
@@ -37,6 +37,7 @@ from enum import IntEnum
 
 __all__ = (
     'User',
+    'AuthorizedUser',
     'Relationship',
     'RelationshipType',
 )
@@ -55,12 +56,6 @@ class User(Schema):
         The display name of user.
     bio: Optional[:class:`str`]
         The bio or about me text of the user profile.
-    email: :class:`str`
-        The email address of the user.
-    password: :class:`str`
-        The password of user.
-    token: :class:`str`
-        The authorization token of user.
     flags: :class:`int`
         The bitwise value for the flags that user has.
     """
@@ -68,10 +63,31 @@ class User(Schema):
     username = fields.String(validate=validate.Length(max=MAX_USERNAME_LENGTH, min=MIN_USERNAME_LENGTH), required=True)
     display_name = fields.String(validate=validate.Length(max=MAX_DISPLAY_NAME_LENGTH, min=MIN_DISPLAY_NAME_LENGTH), required=True)
     bio = fields.String(validate=validate.Length(max=MAX_BIO_LENGTH), allow_none=True, load_default=None)
-    email = fields.Email(required=True)
-    password = fields.String(validate=password_validator_schemas, required=True)
-    token = fields.String(validate=validate.Length(equal=TOKEN_LENGTH), required=True)
     flags = fields.Integer(strict=True, load_default=0)
+
+
+class AuthorizedUser(User):
+    """Represents an authorized user with personal details.
+    
+    A subclass of User and has similar properties with additional attributes
+    documented below:
+
+    Attributes
+    ----------
+    email: :class:`str`
+        The email address of the user.
+    password: :class:`str`
+        The password of user.
+    token: :class:`str`
+        The authorization token of user.
+    dob: :class:`datetime.date`
+        The date of birth in ISO format.
+    """
+    email = fields.Email(required=True)
+    password = fields.String(validate=password_validator, required=True)
+    token = fields.String(validate=validate.Length(equal=TOKEN_LENGTH), required=True)
+    dob = fields.Date(required=True, validate=password_validator)
+
 
 class RelationshipType(IntEnum):
     """The type of relationship between two users.

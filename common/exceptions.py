@@ -22,7 +22,11 @@
 
 from __future__ import annotations
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, List
+from tortoise.exceptions import ValidationError as DBValidationError
+from marshmallow import ValidationError as SchemaValidationError
+from marshmallow.exceptions import SCHEMA
+from common import utils
 
 __all__ = (
     'HTTPException',
@@ -44,21 +48,60 @@ class HTTPException(Exception):
     hint: Optional[:class:`str`]
         The optional hint, if any.
     """
-    def __init__(self, status_code: int, message: str, hint: Optional[str] = None) -> None:
+    def __init__(
+            self,
+            status_code: int,
+            message: Union[str, List[Any], Dict[str, Any]],
+            hint: Optional[str] = None,
+            error_code: int = -1,
+        ) -> None:
         self.status_code = status_code
-        self.message = message
+        self.messages = [message] if isinstance(message, str) else message
         self.hint = hint
+        self.error_code = error_code
 
         super().__init__(message)
 
     def to_dict(self) -> Dict[str, Any]:
         """Returns the dictionary for the exception."""
-        ret = {
-            "error": True,
-            "message": self.message
+        ret: Dict[str, Any] = {
+            'error': True,
+            'error_code': self.error_code,
+            'messages': self.messages,
         }
 
         if self.hint is not None:
-            ret["hint"] = self.hint
+            ret.setdefault('hint', self.hint)
 
         return ret
+
+
+class ValidationError(SchemaValidationError, DBValidationError):
+    def __init__(self, *args: Any,  **kwargs: Any):
+        super().__init__(*args, **kwargs)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns error dictionary."""
+        out = {
+            'error': True,
+            'error_code': self.kwargs.get('error_code', utils.get_error_code('VALIDATION_ERROR')),
+            'messages': self.messages,
+        }
+        hint = self.kwargs.get('hint')
+        if hint:
+            out.setdefault('hint', hint)
+
+        return out
+
+    @classmethod
+    def from_external_exc(cls, exc: Union[DBValidationError, SchemaValidationError]) -> ValidationError:
+        if isinstance(exc, SchemaValidationError):
+            error_code = exc.kwargs.get('error_code', utils.get_error_code('VALIDATION_ERROR'))
+            hint = exc.kwargs.get('hint')
+            message = exc.messages
+        else:
+            error_code = utils.get_error_code('VALIDATION_ERROR')
+            hint = None
+            message = str(exc)
+
+        return cls(message, error_code=error_code, hint=hint)

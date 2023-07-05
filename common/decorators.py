@@ -56,6 +56,8 @@ def require_authorization() -> Callable[[Callable[..., Any]], Any]:
             else:
                 raise HTTPException(401, 'Authorization scheme must be Bearer')
 
+            return await view(*args, **kwargs)
+
         return __decorator
 
     return predicate

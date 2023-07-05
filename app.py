@@ -23,9 +23,11 @@
 from __future__ import annotations
 
 from quart import Quart
-from common.exceptions import HTTPException
-from common import utils
 from tortoise.contrib.quart import register_tortoise
+from tortoise.exceptions import ValidationError as DBValidationError
+from marshmallow import ValidationError as SchemaValidationError
+from common.exceptions import HTTPException, ValidationError
+from common import utils
 
 import blueprints
 
@@ -51,7 +53,22 @@ async def index():
 async def handle_http_exception(exc: HTTPException):
     return exc.to_dict(), exc.status_code
 
+@app.errorhandler(ValidationError)  # type: ignore
+async def handle_validation_error(exc: ValidationError):
+    return exc.to_dict(), 400
+
+@app.errorhandler(SchemaValidationError)  # type: ignore
+async def handle_schema_validation_error(exc: SchemaValidationError):
+    err = ValidationError.from_external_exc(exc)
+    return err.to_dict(), 400
+
+@app.errorhandler(DBValidationError)  # type: ignore
+async def handle_db_validation_error(exc: DBValidationError):
+    err = ValidationError.from_external_exc(exc)
+    return err.to_dict(), 400
+
+
 if __name__ == '__main__':
-    port = utils.get_env_var('LAPIS_PORT', 8000, integer=True)
+    port = utils.get_env_var('LAPIS_PORT', 5000, integer=True)
     debug = utils.get_env_var('LAPIS_DEBUG', False, boolean=True)
     app.run(debug=debug, port=port)
