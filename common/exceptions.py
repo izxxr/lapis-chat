@@ -51,7 +51,7 @@ class HTTPException(Exception):
     def __init__(
             self,
             status_code: int,
-            message: Union[str, List[Any], Dict[str, Any]],
+            message: Union[str, bytes, List[Any], Dict[str, Any]],
             hint: Optional[str] = None,
             error_code: int = -1,
         ) -> None:
@@ -76,25 +76,25 @@ class HTTPException(Exception):
         return ret
 
 
-class ValidationError(SchemaValidationError, DBValidationError):
-    def __init__(self, *args: Any,  **kwargs: Any):
-        super().__init__(*args, **kwargs)
+class ValidationError(HTTPException):
+    def __init__(
+            self,
+            message: Union[str, bytes, List[Any], Dict[str, Any]],
+            *,
+            status_code: int = 400,
+            error_code: int = 1000,
+            hint: Optional[str] = None,
+        ):
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Returns error dictionary."""
-        out = {
-            'error': True,
-            'error_code': self.kwargs.get('error_code', utils.get_error_code('VALIDATION_ERROR')),
-            'messages': self.messages,
-        }
-        hint = self.kwargs.get('hint')
-        if hint:
-            out.setdefault('hint', hint)
-
-        return out
+        super().__init__(message=message, status_code=status_code, hint=hint, error_code=error_code)
 
     @classmethod
     def from_external_exc(cls, exc: Union[DBValidationError, SchemaValidationError]) -> ValidationError:
+        """Constructs ValidationError instance from external exception instances.
+
+        External exception instances mean ValidationError counterparts from
+        the tortoise ORM and marshmallow library.
+        """
         if isinstance(exc, SchemaValidationError):
             error_code = exc.kwargs.get('error_code', utils.get_error_code('VALIDATION_ERROR'))
             hint = exc.kwargs.get('hint')

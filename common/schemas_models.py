@@ -22,9 +22,9 @@
 
 from __future__ import annotations
 
-from typing import Type, Union
+from typing import Union
+from marshmallow import ValidationError
 from common import utils
-from common.exceptions import ValidationError
 from common.constants import (
     MAX_PASSWORD_LENGTH,
     MIN_PASSWORD_LENGTH,

@@ -55,17 +55,17 @@ async def handle_http_exception(exc: HTTPException):
 
 @app.errorhandler(ValidationError)  # type: ignore
 async def handle_validation_error(exc: ValidationError):
-    return exc.to_dict(), 400
+    return exc.to_dict(), exc.status_code
 
 @app.errorhandler(SchemaValidationError)  # type: ignore
 async def handle_schema_validation_error(exc: SchemaValidationError):
     err = ValidationError.from_external_exc(exc)
-    return err.to_dict(), 400
+    return err.to_dict(), err.status_code
 
 @app.errorhandler(DBValidationError)  # type: ignore
 async def handle_db_validation_error(exc: DBValidationError):
     err = ValidationError.from_external_exc(exc)
-    return err.to_dict(), 400
+    return err.to_dict(), err.status_code
 
 
 if __name__ == '__main__':
