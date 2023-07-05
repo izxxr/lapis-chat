@@ -22,16 +22,19 @@
 
 from __future__ import annotations
 
-from tortoise import exceptions
+from typing import Type
+from marshmallow import ValidationError as ValidationErrorMarshmallow
+from tortoise.exceptions import ValidationError as ValidationErrorTortoise
 from common.constants import MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH
 
 import string
 
 __all__ = (
-    'password_validator',
+    'password_validator_models',
+    'password_validator_schemas',
 )
 
-def password_validator(value: str) -> bool:
+def _password_validator_impl(value: str, exception_cls: Type[Exception]) -> bool:
     """A validator that ensures the strongness of a password.
 
     Conditions for a password to be valid:
@@ -53,6 +56,14 @@ def password_validator(value: str) -> bool:
             error = 'Password must contain at least one letter and one digit.'
 
     if error:
-        raise exceptions.ValidationError(error)
+        raise exception_cls(error)
 
     return True
+
+def password_validator_models(value: str) -> bool:
+    """Validates a password. This validator is for tortoise models."""
+    return _password_validator_impl(value, ValidationErrorTortoise)
+
+def password_validator_schemas(value: str) -> bool:
+    """Validates a password. This validator is for marshmallow schemas."""
+    return _password_validator_impl(value, ValidationErrorMarshmallow)

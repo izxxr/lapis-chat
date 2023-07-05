@@ -36,8 +36,6 @@ _self = Blueprint('self', __name__, url_prefix='/self')
 
 users.register_blueprint(_self)
 
-# TODO: Use a schema library (preferably marshmallow) to validate 
-# incoming data such as JSON body
 # TODO: Test these routes
 
 @_self.get('/login')

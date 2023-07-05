@@ -26,7 +26,8 @@ from typing import Optional, List, Dict, Any
 from tortoise.models import Model
 from tortoise import fields, validators, exceptions
 from enum import IntEnum
-from models.validators import password_validator
+from schemas.users import RelationshipType
+from common.schemas_models import password_validator_models
 from common.utils import generate_auth_token
 from common.constants import (
     ULID_LENGTH,
@@ -38,37 +39,19 @@ from common.constants import (
     MAX_EMAIL_ADDRESS_LENGTH,
     MIN_EMAIL_ADDRESS_LENGTH,
     MAX_PASSWORD_LENGTH,
-    MAX_TOKEN_LENGTH,
+    TOKEN_LENGTH,
 )
 
 __all__ = (
     'User',
     'Relationship',
-    'RelationshipType',
 )
 
 
 class User(Model):
     """Represents a user entity.
 
-    Attributes
-    ----------
-    id: :class:`str`
-        The unique ULID ID for this user.
-    username: :class:`str`
-        The unique username of user.
-    display_name: Optional[:class:`str`]
-        The display name of user.
-    bio: Optional[:class:`str`]
-        The bio or about me text of the user profile.
-    email: :class:`str`
-        The email address of the user.
-    password: :class:`str`
-        The password of user.
-    token: :class:`str`
-        The authorization token of user.
-    flags: :class:`int`
-        The bitwise value for the flags that user has.
+    For details on attributes, see the documentation of `schemas.User`.
     """
     id = fields.CharField(
         pk=True,
@@ -92,9 +75,9 @@ class User(Model):
     )
     password = fields.CharField(
         max_length=MAX_PASSWORD_LENGTH,
-        validators=[password_validator],
+        validators=[password_validator_models],
     )
-    token = fields.CharField(unique=True, max_length=MAX_TOKEN_LENGTH, default=generate_auth_token)
+    token = fields.CharField(unique=True, max_length=TOKEN_LENGTH, default=generate_auth_token)
     flags = fields.IntField(default=0)
 
     def to_dict(
@@ -136,23 +119,6 @@ class User(Model):
             out.pop(key, None)
 
         return out
-
-
-class RelationshipType(IntEnum):
-    """The type of relationship between two users.
-
-    Attributes
-    ----------
-    FRIEND
-        Friend relationship.
-    FAVOURITE_FRIENT
-        Friend marked as favorite.
-    BLOCKED
-        The recipient is blocked.
-    """
-    FRIEND = 1
-    FAVORITE_FRIEND = 2
-    BLOCKED = 3
 
 
 class Relationship(Model):
