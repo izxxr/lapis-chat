@@ -48,6 +48,12 @@ ERROR_CODES = {
     # User Account (2000-2999)
     'UNDERAGE': 2000,
     'USERNAME_TAKEN': 2001,
-    'EMAIL_REGISTERED': 2002,
+    'EMAIL_ALREADY_REGISTERED': 2002,
     'PASSWORD_INVALID': 2003,
+    'INVALID_OLD_PASSWORD': 2004,
+}
+
+ERROR_HINTS = {
+    'EMAIL_ALREADY_REGISTERED': 'If you already have an account, try logging in instead.',
+    'USERNAME_TAKEN': 'Try a different username or modify the current one to get a unique username.',
 }

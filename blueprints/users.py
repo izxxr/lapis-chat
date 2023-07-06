@@ -22,11 +22,11 @@
 
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from tortoise.expressions import Q
 from quart import Blueprint, request, g as state
-from common.exceptions import HTTPException
+from common.exceptions import HTTPException, ValidationError
 from common.decorators import require_authorization
-from common import utils
 
 import models
 import schemas
@@ -40,7 +40,29 @@ _self = Blueprint('self', __name__, url_prefix='/self')
 
 users.register_blueprint(_self)
 
-# TODO: Test these routes
+async def ensure_no_conflict(
+        email: Optional[str] = None,
+        username: Optional[str] = None,
+        user: Optional[models.User] = None,
+        **kwargs: Any,
+    ) -> bool:
+    
+    error = None
+    error_code = None
+    filters = [~Q(id=user.id)] if user else []
+
+    if email and await models.User.exists(*filters, email=email):
+        error = 'This email is already registered.'
+        error_code = 'EMAIL_ALREADY_REGISTERED'
+    if username and await models.User.exists(*filters, username=username):
+        error = 'This username is taken.'
+        error_code = 'USERNAME_TAKEN'
+
+    if error and error_code:
+        raise ValidationError(error, error_code=error_code, **kwargs)
+    
+    return True
+
 
 @_self.get('/login')
 async def login():
@@ -90,21 +112,7 @@ async def create_user():
     data = await request.get_json(silent=True) or {}
     json: Dict[str, Any] = schema.load(data)  # type: ignore
 
-    if await models.User.exists(email=json['email']):
-        raise HTTPException(
-            409,
-            'This email is already registered by another account.',
-            hint='Try logging in if you already have an account.',
-            error_code=utils.get_error_code('EMAIL_REGISTERED'),
-        )
-    
-    if await models.User.exists(username=json['username']):
-        raise HTTPException(
-            409,
-            'This username is taken.',
-            error_code=utils.get_error_code('USERNAME_TAKEN'),
-        )
-
+    await ensure_no_conflict(json['email'], json['username'])
     await models.User.create(
         email=json['email'],
         password=json['password'],
@@ -124,3 +132,31 @@ async def delete_self():
     """
     await state.user.delete()
     return ('', 204)
+
+
+@_self.patch('/')
+@require_authorization()
+async def edit_self():
+    """Edits the current user's account.
+
+    Returns updated user on success.
+    """
+    user: models.User = state.user
+    schema = schemas.EditSelfJSON()
+    data = await request.get_json(silent=True) or {}
+    json: Dict[str, Any] = schema.load(data)  # type: ignore
+
+    # Validate old_password
+    if json.get('password'):
+        old_password = json.get('old_password')
+        if not old_password:
+            raise ValidationError({'old_password': 'This field is required when passing password'})
+        if user.password != old_password:
+            raise ValidationError('Invalid old password', error_code='INVALID_OLD_PASSWORD')
+
+    await ensure_no_conflict(json.get('email'), json.get('username'), user)
+
+    user.update_from_dict(json)
+    await user.save()
+
+    return user.to_dict()

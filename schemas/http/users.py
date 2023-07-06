@@ -30,6 +30,7 @@ from common.constants import (
     MIN_USERNAME_LENGTH,
     MAX_DISPLAY_NAME_LENGTH,
     MIN_DISPLAY_NAME_LENGTH,
+    MAX_BIO_LENGTH,
 )
 
 __all__ = (
@@ -37,6 +38,8 @@ __all__ = (
     'LoginResponse',
     'GetSelfResponse',
     'CreateUserJSON',
+    'EditSelfJSON',
+    'EditSelfResponse',
 )
 
 
@@ -71,3 +74,26 @@ class CreateUserJSON(Schema):
     username = fields.String(required=True, validate=validate.Length(max=MAX_USERNAME_LENGTH, min=MIN_USERNAME_LENGTH))
     display_name = fields.String(required=True, validate=validate.Length(max=MAX_DISPLAY_NAME_LENGTH, min=MIN_DISPLAY_NAME_LENGTH))
     dob = fields.Date(required=True, validate=dob_validator)
+
+
+class EditSelfJSON(Schema):
+    """Represents the JSON body for the PATCH /users/self route.
+
+    username (string) : the new username
+    display_name (string) : the display name
+    bio (string?) : the new bio
+    email (string) : the new email
+    password (string) : the new password
+    old_password (string) : the old password, this is only and must be provided
+                            when password field is passed.
+    """
+    username = fields.String(validate=validate.Length(max=MAX_USERNAME_LENGTH, min=MIN_USERNAME_LENGTH))
+    display_name = fields.String(validate=validate.Length(max=MAX_DISPLAY_NAME_LENGTH, min=MIN_DISPLAY_NAME_LENGTH))
+    bio = fields.String(validate=validate.Length(max=MAX_BIO_LENGTH), allow_none=True)
+    email = fields.Email()
+    password = fields.String(validate=password_validator)
+    old_password = fields.String()
+
+
+EditSelfResponse = AuthorizedUser
+"""The OK response of PATCH /users/self"""

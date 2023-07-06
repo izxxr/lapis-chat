@@ -61,7 +61,7 @@ def password_validator(value: str) -> bool:
             error = 'Password must contain at least one letter and one digit.'
 
     if error:
-        raise ValidationError(error, error_code=utils.get_error_code('PASSWORD_INVALID'))
+        raise ValidationError(error, error_code='PASSWORD_INVALID')
 
     return True
 
@@ -79,7 +79,7 @@ def dob_validator(value: Union[datetime.date, str]) -> bool:
     if years < MIN_ALLOWED_AGE:
         raise ValidationError(
             f'User must be at least be {MIN_ALLOWED_AGE} years of age to create an account.',
-            error_code=utils.get_error_code('UNDERAGE'),
+            error_code='UNDERAGE',
         )
 
     return True
