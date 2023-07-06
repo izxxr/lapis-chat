@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any, Union, List
 from tortoise.exceptions import ValidationError as DBValidationError
 from marshmallow import ValidationError as SchemaValidationError
-from common.constants import ERROR_HINTS
+from common.constants import ERROR_HINTS, ERROR_NAMES
 from common import utils
 
 __all__ = (
@@ -59,8 +59,10 @@ class HTTPException(Exception):
         if isinstance(error_code, str):
             error_code = utils.get_error_code(error_code)
 
-        if hint is None and isinstance(error_code, str):
-            self.hint = ERROR_HINTS.get(error_code)
+        if hint is None:
+            code = ERROR_NAMES.get(error_code)
+            if code:
+                self.hint = ERROR_HINTS.get(code)
 
         self.status_code = status_code
         self.messages = [message] if isinstance(message, str) else message

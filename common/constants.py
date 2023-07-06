@@ -53,6 +53,11 @@ ERROR_CODES = {
     'INVALID_OLD_PASSWORD': 2004,
 }
 
+ERROR_NAMES = {
+    code: name
+    for name, code in ERROR_CODES.items()
+}
+
 ERROR_HINTS = {
     'EMAIL_ALREADY_REGISTERED': 'If you already have an account, try logging in instead.',
     'USERNAME_TAKEN': 'Try a different username or modify the current one to get a unique username.',
