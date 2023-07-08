@@ -37,6 +37,7 @@ __all__ = (
 
 app = Quart(__name__)
 app.register_blueprint(blueprints.users)
+app.register_blueprint(blueprints.sessions)
 
 register_tortoise(
     app,

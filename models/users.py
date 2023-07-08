@@ -139,8 +139,8 @@ class Relationship(Model):
     type: :class:`RelationshipType`
         The type of relationship.
     """
-    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField('models.User', related_name='users')
-    recipient: fields.ForeignKeyRelation[User] = fields.ForeignKeyField('models.User', related_name='recipients')
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField('models.User', related_name='relationship_users')
+    recipient: fields.ForeignKeyRelation[User] = fields.ForeignKeyField('models.User', related_name='relationship_recipients')
     type = fields.IntEnumField(RelationshipType)
 
     def is_friend(self) -> bool:
@@ -167,3 +167,4 @@ class Relationship(Model):
                 out.pop(key, None)
 
         return out
+    

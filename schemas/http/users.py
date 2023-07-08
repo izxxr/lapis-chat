@@ -35,11 +35,8 @@ from common.constants import (
 
 __all__ = (
     'LoginQueryParams',
-    'LoginResponse',
-    'GetSelfResponse',
     'CreateUserJSON',
     'EditSelfJSON',
-    'EditSelfResponse',
 )
 
 
@@ -51,13 +48,6 @@ class LoginQueryParams(Schema):
     """
     email = fields.Email(required=True)
     password = fields.String(validate=password_validator, required=True)
-
-
-LoginResponse = AuthorizedUser
-"""The OK response of GET /users/self/login"""
-
-GetSelfResponse = AuthorizedUser
-"""The OK response of GET /users/self"""
 
 
 class CreateUserJSON(Schema):
@@ -93,7 +83,3 @@ class EditSelfJSON(Schema):
     email = fields.Email()
     password = fields.String(validate=password_validator)
     old_password = fields.String()
-
-
-EditSelfResponse = AuthorizedUser
-"""The OK response of PATCH /users/self"""
