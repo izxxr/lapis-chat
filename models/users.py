@@ -79,11 +79,11 @@ class User(Model):
     )
     password = fields.CharField(
         max_length=MAX_PASSWORD_LENGTH,
-        validators=[password_validator],
+        validators=[lambda v: password_validator(v, db=True)],
     )
     token = fields.CharField(unique=True, max_length=TOKEN_LENGTH, default=generate_auth_token)
     flags = fields.IntField(default=0)
-    dob = fields.DateField(default=datetime.date.today, validators=[dob_validator])
+    dob = fields.DateField(default=datetime.date.today, validators=[lambda v: dob_validator(v, db=True)])
 
     def to_dict(
             self,
