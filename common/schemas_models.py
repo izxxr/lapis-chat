@@ -41,8 +41,7 @@ __all__ = (
 
 def _make_error(
         message: str,
-        error_code: str = 'VALIDATION_ERROR',
-        hint: Optional[str] = None,
+        error_code: Optional[str] = None,
         *,
         db: bool = True,
     ) -> Union[DBValidationError, SchemaValidationError]:
@@ -51,11 +50,12 @@ def _make_error(
     # ValidationError.flatten_error_dict() method in common.exceptions.
     if db:
         return DBValidationError(message)
-    
+    if error_code is None:
+        return SchemaValidationError(message)
+
     state = {
         '__message': message,
         '__error_code': error_code,
-        '__hint': hint,
         '__flatten': True,
     }
     return SchemaValidationError(state)
