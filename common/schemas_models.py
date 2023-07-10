@@ -22,9 +22,9 @@
 
 from __future__ import annotations
 
-from typing import Union
-from marshmallow import ValidationError
-from common import utils
+from typing import Union, Optional
+from tortoise.exceptions import ValidationError as DBValidationError
+from marshmallow import ValidationError as SchemaValidationError
 from common.constants import (
     MAX_PASSWORD_LENGTH,
     MIN_PASSWORD_LENGTH,
@@ -39,7 +39,28 @@ __all__ = (
     'dob_validator',
 )
 
-def password_validator(value: str) -> bool:
+def _make_error(
+        message: str,
+        error_code: str = 'VALIDATION_ERROR',
+        hint: Optional[str] = None,
+        *,
+        db: bool = True,
+    ) -> Union[DBValidationError, SchemaValidationError]:
+
+    # For explanation of why this is done, see the comment on
+    # ValidationError.flatten_error_dict() method in common.exceptions.
+    if db:
+        return DBValidationError(message)
+    
+    state = {
+        '__message': message,
+        '__error_code': error_code,
+        '__hint': hint,
+        '__flatten': True,
+    }
+    return SchemaValidationError(state)
+
+def password_validator(value: str, *, db: bool = False) -> bool:
     """A validator that ensures the strongness of a password.
 
     Conditions for a password to be valid:
@@ -61,25 +82,26 @@ def password_validator(value: str) -> bool:
             error = 'Password must contain at least one letter and one digit.'
 
     if error:
-        raise ValidationError(error, error_code='PASSWORD_INVALID')
+        raise _make_error(error, 'INVALID_PASSWORD', db=db)
 
     return True
 
-def dob_validator(value: Union[datetime.date, str]) -> bool:
+def dob_validator(value: Union[datetime.date, str], *, db: bool = False) -> bool:
     """A validator that ensures the minimum age requirement of 13 years."""
     if isinstance(value, str):
         try:
             value = datetime.date.fromisoformat(value)
         except ValueError:
-            raise ValidationError('Must be in valid ISO format')
+            raise _make_error('Must be in valid ISO format')
 
     age = datetime.date.today() - value
     years = age.days // 365
 
     if years < MIN_ALLOWED_AGE:
-        raise ValidationError(
+        raise _make_error(
             f'User must be at least be {MIN_ALLOWED_AGE} years of age to create an account.',
-            error_code='UNDERAGE',
+            'UNDERAGE',
+            db=db,
         )
 
     return True

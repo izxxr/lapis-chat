@@ -97,6 +97,34 @@ class ValidationError(HTTPException):
 
         super().__init__(message=message, status_code=status_code, hint=hint, error_code=error_code)
 
+    @staticmethod
+    def _flatten_error_dict(exc: SchemaValidationError) -> ValidationError:
+        # HACK: Might possibly behave abnormally with some edge case but there
+        # is no other better way of achieving this because Marshmallow tends to
+        # re-initialize the ValidationError essentially discarding the error data
+        # which makes it difficult to propagate the error state. Hence the hack is
+        # to plug all the state data in the error.messages dictinary 
+        # (see common.schemas_models._make_error()). Keys prefixed with double underscore
+        # hold this data. This method handles these keys and assign their values to relevant
+        # attributes of the class and remove them from the dictionary before it is returned
+        # as request's response. 
+        if not isinstance(exc.messages, dict):
+            return ValidationError(exc.messages)
+
+        out = ValidationError(exc.messages)
+        for key, value in exc.messages.items():
+            if isinstance(value, list):
+                value = value[0]
+            if isinstance(value, dict):
+                flatten = value.pop('__flatten', False)
+                if flatten:
+                    message = value.pop('__message', None)
+                    error_code = value.pop('__error_code', 'VALIDATION_ERROR')
+                    out.messages[key] = [message]  # type: ignore
+                    out.error_code = utils.get_error_code(error_code)
+
+        return out
+
     @classmethod
     def from_external_exc(cls, exc: Union[DBValidationError, SchemaValidationError]) -> ValidationError:
         """Constructs ValidationError instance from external exception instances.
@@ -105,12 +133,6 @@ class ValidationError(HTTPException):
         the tortoise ORM and marshmallow library.
         """
         if isinstance(exc, SchemaValidationError):
-            error_code = exc.kwargs.get('error_code', utils.get_error_code('VALIDATION_ERROR'))
-            hint = exc.kwargs.get('hint')
-            message = exc.messages
+            return cls._flatten_error_dict(exc)
         else:
-            error_code = utils.get_error_code('VALIDATION_ERROR')
-            hint = None
-            message = str(exc)
-
-        return cls(message, error_code=error_code, hint=hint)
+            return cls(str(exc))
