@@ -59,8 +59,8 @@ async def ensure_no_conflict(
         error_code = 'USERNAME_TAKEN'
 
     if error and error_code:
-        raise ValidationError(error, error_code=error_code, **kwargs)
-    
+        raise HTTPException(409, error, error_code=error_code, **kwargs)
+
     return True
 
 
