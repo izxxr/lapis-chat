@@ -1,2 +1,2 @@
-# lapis-api
-The Lapis Chat REST and WebSocket API.
+# lapis-chat
+A chatting application.
