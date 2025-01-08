@@ -23,15 +23,12 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
-from routers.users import users
 
 __all__ = (
     "app",
 )
 
 app = FastAPI()
-app.include_router(users)
-
 
 @app.get("/")
 def index():

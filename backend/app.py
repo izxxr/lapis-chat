@@ -20,7 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from core.app import *
+from core.app import app
+from routers.users import users
+
+app.include_router(users)
 
 __all__ = (
     "app",
