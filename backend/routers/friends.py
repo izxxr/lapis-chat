@@ -26,7 +26,6 @@ from typing import Any
 from fastapi import APIRouter
 from core.typedefs import Request
 from core.deps import requires_auth_token
-from core.models import friends as friends_models
 from core.database import db_ctx
 
 __all__ = (
