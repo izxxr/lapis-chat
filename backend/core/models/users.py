@@ -22,7 +22,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 from pydantic import UUID4, Field, AwareDatetime
 from core.models.base import BaseDatabaseModel
 from core import helpers
@@ -63,14 +62,14 @@ class User(BaseDatabaseModel):
     created_at: AwareDatetime
     """The time when this user was created."""
 
-    fullname: Optional[str] = Field(
+    fullname: str | None = Field(
         max_length=USER_FULLNAME_MAX_LENGTH,
         min_length=USER_FULLNAME_MIN_LENGTH,
         default=None,
     )
     """The user's full name."""
 
-    bio: Optional[str] = Field(
+    bio: str | None = Field(
         max_length=USER_BIO_MAX_LENGTH,
         default=None,
     )
@@ -114,14 +113,14 @@ class EditAuthorizedUserJSON(BaseDatabaseModel):
     username: str = Field(max_length=USER_USERNAME_MAX_LENGTH, min_length=USER_USERNAME_MIN_LENGTH, default=helpers.MISSING)
     """The new username."""
 
-    fullname: Optional[str] = Field(
+    fullname: str | None = Field(
         max_length=USER_FULLNAME_MAX_LENGTH,
         min_length=USER_FULLNAME_MIN_LENGTH,
         default=helpers.MISSING,
     )
     """The full name. Set None to remove."""
 
-    bio: Optional[str] = Field(
+    bio: str | None = Field(
         max_length=USER_BIO_MAX_LENGTH,
         default=helpers.MISSING,
     )
@@ -137,12 +136,12 @@ class CreateUserJSON(BaseDatabaseModel):
     username: str = Field(max_length=USER_USERNAME_MAX_LENGTH, min_length=USER_USERNAME_MIN_LENGTH, default=helpers.MISSING)
     """The new username."""
 
-    fullname: Optional[str] = Field(
+    fullname: str | None = Field(
         max_length=USER_FULLNAME_MAX_LENGTH,
         min_length=USER_FULLNAME_MIN_LENGTH,
         default=helpers.MISSING,
     )
-    """The full name. Set None to remove."""
+    """The full name (optional)"""
 
     password: str = Field(min_length=USER_PASSWORD_MIN_LENGTH, default=helpers.MISSING)
     """The login password of the user."""
