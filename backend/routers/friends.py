@@ -57,7 +57,7 @@ async def send_accept_friend_request(request: Request, user_id: str) -> dict[str
     """Send or accept a friend request."""
     db = db_ctx.get()
     result = await db.send_accept_friend_request(str(request.state.current_user.id), user_id)
-    return {"operation": "REQUEST_SENT" if isinstance(result, friends_models.FriendRequest) else "REQUEST_ACCEPTED"}
+    return {"operation": "REQUEST_SENT" if result else "REQUEST_ACCEPTED"}
 
 @friends.delete("/requests/{user_id}", dependencies=[requires_auth_token()])
 async def withdraw_reject_friend_request(request: Request, user_id: str) -> dict[str, Any]:

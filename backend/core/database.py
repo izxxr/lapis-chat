@@ -277,7 +277,7 @@ class DatabaseClient:
         }
         await self._db.friend_requests.delete_one(query)
 
-    async def send_accept_friend_request(self, user_id: str, target_id: str) -> friends.FriendRequest | friends.Friend:
+    async def send_accept_friend_request(self, user_id: str, target_id: str) -> bool:
         """Sends or accepts friend request between the given users' IDs.
 
         The first user ID is considered as operating user's ID.
@@ -306,7 +306,7 @@ class DatabaseClient:
             except pymongo.errors.DuplicateKeyError:
                 raise errcodes.FRIEND_REQUEST_ALREADY_SENT.http_exc()
 
-            return friends.FriendRequest(**request_data, operating_user_id=user_id)
+            return True
         else:
             # accepting the request
             friend_data: dict[str, Any] = {
@@ -318,7 +318,7 @@ class DatabaseClient:
             }
             await self.delete_friend_request(target_id, user_id)
             await self._db.friends.insert_one(friend_data)
-            return friends.Friend(**friend_data, operating_user_id=user_id)
+            return False
 
     async def withdraw_reject_friend_request(self, user_id: str, target_id: str) -> bool:
         """Withdraws or rejects friend request between the given users' IDs.
