@@ -27,6 +27,7 @@ from fastapi import HTTPException
 __all__ = (
     "Error",
     "GENERIC_ERROR",
+    "ENTITY_NOT_FOUND",
     "INVALID_AUTHORIZATION",
     "USERNAME_TAKEN",
 )
@@ -48,7 +49,9 @@ class Error:
         return HTTPException(self.http_status_code, {"error_code": self.error_code, "message": message if message else self.message})
 
 
+# Generic errors
 GENERIC_ERROR = Error(400, 10000, "An unknown error occured.")
+ENTITY_NOT_FOUND = Error(404, 10001, "This entity could not be found.")
 
 # Authentication errors
 INVALID_AUTHORIZATION = Error(401, 11000, "Invalid credentials or authorization token.")

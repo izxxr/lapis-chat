@@ -69,7 +69,12 @@ async def create_user(data: users_models.CreateUserJSON) -> users_models.Authori
     return await db.create_user(data)
 
 @users.get("/{user_id}", dependencies=[requires_auth_token()])
-async def get_user(user_id: str) -> users_models.User | None:
+async def get_user(user_id: str) -> users_models.User:
     """Get information about a user."""
     db = db_ctx.get()
-    return await db.fetch_user(user_id, authorized=False)
+    user = await db.fetch_user(user_id, authorized=False)
+
+    if user is None:
+        raise errcodes.ENTITY_NOT_FOUND.http_exc("User not found.")
+
+    return user
