@@ -22,8 +22,10 @@
 
 from core.app import app
 from routers.users import users
+from routers.friends import friends
 
 app.include_router(users)
+app.include_router(friends)
 
 __all__ = (
     "app",

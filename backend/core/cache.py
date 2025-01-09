@@ -49,7 +49,7 @@ class CacheManager:
     def _apply_scheme(self, scheme: str, value: str) -> str:
         return f"{scheme}:{value}"
 
-    # --- Users ---
+    # --- Users by token ---
 
     def _scheme_user_token(self, value: str):
         return self._apply_scheme("user_token", value)
@@ -68,8 +68,30 @@ class CacheManager:
         """
         key = self._scheme_user_token(user.token)
         value = json.dumps(user.model_dump_database())
-        await self._redis.set(key, value, xx=update)
+        await self._redis.set(key, value, ex=300, xx=update)
 
     async def delete_user_by_token(self, token: str) -> None:
         """Evicts the given user for the given encrypted token."""
         await self._redis.delete(self._scheme_user_token(token))
+
+    # --- Users by ID ---
+
+    def _scheme_user_id_integ(self, value: str):
+        return self._apply_scheme("user_id_integ", value)
+
+    async def check_user_id_exists(self, user_id: str) -> bool | None:
+        """Checks if the given user ID exists or not.
+
+        If this method returns None, it means that existence is not known.
+        """
+        exists = await self._redis.get(self._scheme_user_id_integ(user_id))
+
+        if exists is None:
+            return
+
+        return bool(int(exists))
+
+    async def set_user_id_exists(self, user_id: str, exists: bool, update: bool = False) -> None:
+        """Sets existence status of a user ID."""
+        key = self._scheme_user_id_integ(user_id)
+        await self._redis.set(key, int(exists), xx=update, ex=300)

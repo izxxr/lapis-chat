@@ -45,3 +45,15 @@ class BaseDatabaseModel(BaseModel):
         """
         by_alias = kwargs.pop("by_alias", True)
         return json.loads(self.model_dump_json(by_alias=by_alias, **kwargs))
+
+    def model_dump_api(self, **kwargs: Any) -> dict[str, Any]:
+        """Returns HTTP API compatible serialized model.
+
+        By default, this is equivalent to model_dump_database() but could be
+        overriden to implement another behaviour.
+
+        Note that unlike model_dump_database(), this method does not pass
+        by_alias as True by default.
+        """
+        by_alias = kwargs.pop("by_alias", False)
+        return self.model_dump_database(by_alias=by_alias, **kwargs)

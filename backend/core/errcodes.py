@@ -58,3 +58,8 @@ INVALID_AUTHORIZATION = Error(401, 11000, "Invalid credentials or authorization 
 
 # Users related errors
 USERNAME_TAKEN = Error(409, 12000, "This username is already taken.")
+
+# Friends and friend requests
+REQUESTER_RECIPIENT_ID_EQUAL = Error(400, 13000, "Requester and recipient ID cannot be same.")
+FRIEND_REQUEST_ALREADY_SENT = Error(409, 13001, "Friend request has already been sent.")
+USER_ALREADY_FRIEND = Error(409, 13002, "The user is already a friend.")

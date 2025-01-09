@@ -24,15 +24,16 @@ from __future__ import annotations
 
 from typing import Any
 from contextvars import ContextVar
-from pymongo import ReturnDocument
 from motor.motor_asyncio import AsyncIOMotorClient
 from core.config import Config
 from core.cache import CacheManager
-from core.models import users
+from core.models import users, friends
 from core import helpers, errcodes
 
 import uuid
 import datetime
+import pymongo
+import pymongo.errors
 
 __all__ = (
     "DatabaseClient",
@@ -68,11 +69,20 @@ class DatabaseClient:
 
     # -- Users --
 
-    async def validate_user_username(self, username: str) -> users.User | None:
+    async def validate_user_username(self, username: str) -> None:
         """Ensures that the given username must not exist raising HTTP exception otherwise."""
         existing = await self._db.users.find_one({"username": username})
         if existing:
             raise errcodes.USERNAME_TAKEN.http_exc()
+
+    async def validate_user_exists(self, user_id: str) -> None:
+        """Ensures that the given user ID exists."""
+        exists = await self._cache.check_user_id_exists(user_id)
+        if exists is None:
+            exists = await self._db.users.find_one({"_id": user_id})
+            await self._cache.set_user_id_exists(user_id, exists is not None)
+        if not exists:
+            raise errcodes.ENTITY_NOT_FOUND.http_exc("This user does not exist.")
 
     async def fetch_user(self, user_id: str, authorized: bool = False) -> users.User | users.AuthorizedUser | None:
         """Fetches the user from given ID.
@@ -129,8 +139,14 @@ class DatabaseClient:
         """Deletes the user for given user ID."""
         deleted = await self._db.users.find_one_and_delete({"_id": user_id})
 
-        if deleted:
-            await self._cache.delete_user_by_token(deleted["token"])
+        if not deleted:
+            return
+
+        await self._db.friend_requests.delete_many({"$or": [{"_id.requester_id": user_id}, {"_id.recipient_id": user_id}]})
+        await self._db.friends.delete_many({"$or": [{"_id.first_user": user_id}, {"_id.second_user": user_id}]})
+
+        await self._cache.delete_user_by_token(deleted["token"])
+        await self._cache.set_user_id_exists(user_id, False, update=True)
 
     async def edit_user(self, user_id: str, data: users.EditAuthorizedUserJSON) -> users.AuthorizedUser:
         """Updates the user for given user ID."""
@@ -154,7 +170,7 @@ class DatabaseClient:
         user_data = await self._db.users.find_one_and_update(
             {"_id": user_id},
             {"$set": update_data},
-            return_document=ReturnDocument.AFTER
+            return_document=pymongo.ReturnDocument.AFTER
         )
         
         # user_data should never be None as this method is only called
@@ -165,6 +181,170 @@ class DatabaseClient:
         await self._cache.set_user_by_token(user, update=update)
         return user
 
+    # -- Friends --
+
+    async def fetch_all_friends(self, user_id: str) -> list[friends.Friend]:
+        """Get all friends of given user's ID.
+
+        Returned objects are operating user ID aware.
+        """
+        query = {
+            "$or": [
+                {"_id.first_user": user_id},
+                {"_id.second_user": user_id},
+            ]
+        }
+        friends_data: list[dict[str, Any]] = await self._db.friends.find(
+            query,
+            sort=[("created_at", pymongo.ASCENDING)]
+        ).to_list()  # type: ignore
+
+        return [friends.Friend(**f, operating_user_id=user_id) for f in friends_data]
+
+    async def fetch_friend(self, user_id: str, target_id: str) -> friends.Friend | None:
+        """Returns Friend object between the given users' IDs.
+
+        If two users are not friend, this returns None. The first
+        user ID is considered as operating user's ID.
+        """
+        query = {
+            "$or": [
+                {"_id.first_user": user_id, "_id.second_user": target_id},
+                {"_id.first_user": target_id, "_id.second_user": user_id},
+            ]
+        }
+        friend_data = await self._db.friends.find_one(query)
+
+        if friend_data:
+            return friends.Friend(**friend_data, operating_user_id=user_id)
+
+    async def unfriend_user(self, user_id: str, target_id: str) -> None:
+        """Unfriends two users."""
+        if user_id == target_id:
+            raise errcodes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
+
+        query = {
+            "$or": [
+                {"_id.first_user": user_id, "_id.second_user": target_id},
+                {"_id.first_user": target_id, "_id.second_user": user_id},
+            ]
+        }
+        # In theory, delete_one should also work here as other methods ensure
+        # that documents with same but swapped first_user/second_user do
+        # not coexist. However, delete_many() is safer in case that happens
+        # for any reason.
+        await self._db.friends.delete_many(query)
+
+    # -- Friend Requests --
+
+    async def fetch_all_friend_requests(self, user_id: str) -> list[friends.FriendRequest]:
+        """Fetches all the friend requests for given user's ID.
+
+        Returned objects are operating ID aware.
+        """
+        query = {
+            "$or": [
+                {"_id.requester_id": user_id},
+                {"_id.recipient_id": user_id},
+            ]
+        }
+        results: list[dict[str, Any]] = await self._db.friend_requests.find(
+            query,
+            sort=[("created_at", pymongo.ASCENDING)]
+        ).to_list()  # type: ignore
+
+        return [friends.FriendRequest(**r, operating_user_id=user_id) for r in results]
+
+    async def fetch_friend_request(self, requester_id: str, recipient_id: str) -> friends.FriendRequest | None:
+        """Returns FriendRequest object between the given users' IDs.
+
+        The returned object is not operating user's ID aware.
+        """
+        query = {
+            "_id.requester_id": requester_id,
+            "_id.recipient_id": recipient_id,
+        }
+        result = await self._db.friend_requests.find_one(query)
+
+        if result:
+            return friends.FriendRequest(**result, operating_user_id=None)
+
+    async def delete_friend_request(self, requester_id: str, recipient_id: str) -> None:
+        """Delete friend request between the given users' IDs."""
+        query = {
+            "_id.requester_id": requester_id,
+            "_id.recipient_id": recipient_id,
+        }
+        await self._db.friend_requests.delete_one(query)
+
+    async def send_accept_friend_request(self, user_id: str, target_id: str) -> friends.FriendRequest | friends.Friend:
+        """Sends or accepts friend request between the given users' IDs.
+
+        The first user ID is considered as operating user's ID.
+        """
+        if user_id == target_id:
+            raise errcodes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
+
+        incoming_request = await self.fetch_friend_request(target_id, user_id)
+
+        if incoming_request is None:
+            # sending a request
+            friendship_exists = await self.fetch_friend(user_id, target_id)
+            if friendship_exists:
+                raise errcodes.USER_ALREADY_FRIEND.http_exc()
+
+            await self.validate_user_exists(target_id)
+            request_data: dict[str, Any] = {
+                "_id": {
+                    "requester_id": user_id,
+                    "recipient_id": target_id,
+                },
+                "created_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            }
+            try:
+                await self._db.friend_requests.insert_one(request_data)
+            except pymongo.errors.DuplicateKeyError:
+                raise errcodes.FRIEND_REQUEST_ALREADY_SENT.http_exc()
+
+            return friends.FriendRequest(**request_data, operating_user_id=user_id)
+        else:
+            # accepting the request
+            friend_data: dict[str, Any] = {
+                "_id": {
+                    "first_user": user_id,
+                    "second_user": target_id,
+                },
+                "created_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat(),
+            }
+            await self.delete_friend_request(target_id, user_id)
+            await self._db.friends.insert_one(friend_data)
+            return friends.Friend(**friend_data, operating_user_id=user_id)
+
+    async def withdraw_reject_friend_request(self, user_id: str, target_id: str) -> bool:
+        """Withdraws or rejects friend request between the given users' IDs.
+
+        The first user ID is considered as operating user's ID. Returns True
+        if a request was withdrawn and False if a request was rejected. Raises
+        404 if no request was found for the given user.
+        """
+        if user_id == target_id:
+            raise errcodes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
+
+        incoming_request = await self.fetch_friend_request(target_id, user_id)
+
+        if incoming_request is not None:
+            # rejecting a request
+            await self.delete_friend_request(target_id, user_id)
+            return False
+
+        outgoing_request = await self.fetch_friend_request(user_id, target_id)
+
+        if outgoing_request is not None:
+            # withdrawing a request
+            await self.delete_friend_request(user_id, target_id)
+            return True
+        
+        raise errcodes.ENTITY_NOT_FOUND.http_exc("No incoming or outgoing request found for this user.")
 
 db_ctx: ContextVar[DatabaseClient] = ContextVar("db", default=DatabaseClient())
 """Context variable for managing global database client instance."""
