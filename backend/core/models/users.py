@@ -73,6 +73,7 @@ class User(BaseDatabaseModel):
         max_length=USER_BIO_MAX_LENGTH,
         default=None,
     )
+    """The user's bio section."""
 
 
 class AuthorizedUser(User):
