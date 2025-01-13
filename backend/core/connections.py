@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from core.models import messages
 from core import codes
 
 import asyncio
@@ -91,12 +92,12 @@ class ConnectionManager:
         user_id = str(ws.user.id)
         handler = self._event_handler_wrapper(ws)
 
-        # User Events
         friends = await self._db.fetch_all_friends(user_id)
 
         for friend in friends:
             friend_id = friend.friend_id
 
+            # User Events - Friends
             await subscribe(**{events.channel_user_update(friend_id): handler})
             await subscribe(**{events.channel_user_delete(friend_id): handler})
 
@@ -104,6 +105,11 @@ class ConnectionManager:
         await subscribe(**{events.channel_friend_create(user_id): handler})
         await subscribe(**{events.channel_friend_delete(user_id): handler})
         await subscribe(**{events.channel_friend_request_receive(user_id): handler})
+
+        # Message Events - DMs
+        await subscribe(**{events.channel_message_create(messages.MessageDestinationType.DIRECT, user_id): handler})
+        await subscribe(**{events.channel_message_update(messages.MessageDestinationType.DIRECT, user_id): handler})
+        await subscribe(**{events.channel_message_delete(messages.MessageDestinationType.DIRECT, user_id): handler})
 
         # Notify the main thread that subscription is done.
         ws._ready.set()  # type: ignore

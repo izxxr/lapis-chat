@@ -58,6 +58,8 @@ class Error:
 # Generic errors
 GENERIC_ERROR = Error(400, 10000, "An unknown error occured.")
 ENTITY_NOT_FOUND = Error(404, 10001, "This entity could not be found.")
+PAGINATION_LIMIT_EXCEEDED = Error(400, 10002, "Pagination limit of this entity has been exceeded.")
+DATETIME_ERROR = Error(400, 10003, "Invalid datetime format.")
 
 # Authentication errors
 INVALID_AUTHORIZATION = Error(401, 11000, "Invalid credentials or authorization token.")

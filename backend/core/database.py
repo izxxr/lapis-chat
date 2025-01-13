@@ -27,7 +27,7 @@ from contextvars import ContextVar
 from motor.motor_asyncio import AsyncIOMotorClient
 from core.config import Config
 from core.cache import CacheManager
-from core.models import users, friends
+from core.models import users, friends, messages
 from core.events import EventHandler
 from core.connections import ConnectionManager
 from core import helpers
@@ -356,6 +356,101 @@ class DatabaseClient:
             return True
         
         raise codes.ENTITY_NOT_FOUND.http_exc("No incoming or outgoing request found for this user.")
+
+    # -- Messages --
+
+    async def send_direct_message(self, author_id: str, recipient_id: str, data: messages.SendMessageJSON) -> messages.Message:
+        """Send a direct message to given user."""
+        message_data: dict[str, Any] = {
+            "_id": str(uuid.uuid4()),
+            "author_id": author_id,
+            "dest_type": messages.MessageDestinationType.DIRECT,
+            "dest_id": recipient_id,
+            "created_at": datetime.datetime.now(tz=datetime.timezone.utc),
+            "content": data.content,
+        }
+        message = messages.Message(**message_data)
+
+        await self._db.messages.insert_one(message_data)
+        await self.events.dispatch_message_create(message)
+
+        return message
+
+    async def fetch_direct_messages(
+            self,
+            author_id: str,
+            recipient_id: str,
+            _from: datetime.datetime | None = None,
+            to: datetime.datetime | None = None,
+            limit: int = 16,
+    ) -> list[messages.Message]:
+        """Fetch messages from a direct message chat."""
+        if limit > 64:
+            raise codes.PAGINATION_LIMIT_EXCEEDED.http_exc("Pagination of messages is capped at 64 messages per request.")
+
+        query: dict[str, Any] = {
+            "dest_type": messages.MessageDestinationType.DIRECT.value,
+            "$or": [
+                {"author_id": author_id, "dest_id": recipient_id},
+                {"author_id": recipient_id, "dest_id": author_id},
+            ]
+        }
+
+        if (_from and to) and (_from > to):
+            raise codes.DATETIME_ERROR.http_exc("'from' time cannot be ahead of 'to' time.")
+
+        if _from is not None:
+            query["created_at"] = {"gte": _from.isoformat()}
+        if to is not None:
+            query["created_at"] = {"lte": to.isoformat()}
+
+        messages_data: list[dict[str, Any]] = await self._db.messages.find(
+            query,
+            limit=limit,
+            sort=[("created_at", pymongo.ASCENDING)],
+        ).to_list()  # type: ignore
+        return [messages.Message(**m) for m in messages_data]
+
+    async def fetch_direct_message(self, message_id: str) -> messages.Message | None:
+        """Fetch a direct message by its ID."""
+        message_data = await self._db.messages.find_one({"_id": message_id})
+
+        if message_data:
+            return messages.Message(**message_data)
+
+    async def edit_message(self, author_id: str, recipient_id: str, message_id: str, data: messages.EditMessageJSON) -> messages.Message:
+        """Edit a message."""
+        message = await self.fetch_direct_message(message_id)
+        if message is None:
+            raise codes.ENTITY_NOT_FOUND.http_exc("This message does not exist.")
+        if str(message.dest_id) != recipient_id:
+            raise codes.ENTITY_NOT_FOUND.http_exc("This message does not exist.")
+        if str(message.author_id) != author_id:
+            raise codes.ENTITY_NOT_FOUND.http_exc("Cannot edit a message that is not authored by the current user.")
+
+        message_data = await self._db.messages.find_one_and_update(
+            {"_id": message_id},
+            {"$set": data.model_dump_database()},
+            return_document=pymongo.ReturnDocument.AFTER
+        )
+        assert message_data is not None
+
+        message = messages.Message(**message_data)
+        await self.events.dispatch_message_update(message)
+
+        return message
+
+    async def delete_message(self, author_id: str, recipient_id: str, message_id: str) -> None:
+        """Deletes a message."""
+        message = await self.fetch_direct_message(message_id)
+        if message is None:
+            raise codes.ENTITY_NOT_FOUND.http_exc("This message does not exist.")
+        if str(message.dest_id) != recipient_id:
+            raise codes.ENTITY_NOT_FOUND.http_exc("This message does not exist.")
+        if str(message.author_id) != author_id:
+            raise codes.ENTITY_NOT_FOUND.http_exc("Cannot delete a message that is not authored by the current user.")
+
+        await self._db.messages.delete_one({"_id": message_id})
 
 db_ctx: ContextVar[DatabaseClient] = ContextVar("db", default=DatabaseClient())
 """Context variable for managing global database client instance."""

@@ -85,6 +85,10 @@ class AuthorizedUser(User):
     token: str
     """The user's authorization token."""
 
+    def to_user(self) -> User:
+        """Returns this class as users.User model."""
+        return User(**self.model_dump())
+
 # --- API types --- #
 
 class GetAuthorizedUserCredsJSON(BaseDatabaseModel):

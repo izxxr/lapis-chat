@@ -24,10 +24,12 @@ from core.app import app
 from routers.users import users
 from routers.friends import friends
 from routers.websocket import ws
+from routers.dms import dms
 
 app.include_router(users)
 app.include_router(friends)
 app.include_router(ws)
+app.include_router(dms)
 
 __all__ = (
     "app",

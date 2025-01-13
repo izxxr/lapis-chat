@@ -23,12 +23,12 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from core.models import users, friends, messages
 
 import json
 
 if TYPE_CHECKING:
     from core.cache import CacheManager
-    from core.models import users, friends
 
 __all__ = (
     "EventHandler",
@@ -120,3 +120,68 @@ class EventHandler:
 
     async def dispatch_friend_request_receive(self, request: friends.FriendRequest) -> None:
         await self._dispatch(self.channel_friend_request_receive(str(request.id.recipient_id)), request.model_dump_api())
+
+    # Messages
+
+    def channel_message_create(self, dest_type: messages.MessageDestinationType, dest_id: str) -> str:
+        """Channel for message creation events.
+
+        Whenever a message is sent to dest_id of dest_type, an event is published
+        to this channel.
+        """
+        return self._apply_scheme("message_create", str(dest_type.value), dest_id)
+
+    def channel_message_update(self, dest_type: messages.MessageDestinationType, dest_id: str) -> str:
+        """Channel for message update events.
+
+        Whenever a message sent to dest_id of dest_type is updated, an event is published
+        to this channel.
+        """
+        return self._apply_scheme("message_update", str(dest_type.value), dest_id)
+
+    def channel_message_delete(self, dest_type: messages.MessageDestinationType, dest_id: str) -> str:
+        """Channel for message delete events.
+
+        Whenever a message sent to dest_id of dest_type is updated, an event is published
+        to this channel.
+        """
+        return self._apply_scheme("message_update", str(dest_type.value), dest_id)
+
+    async def dispatch_message_create(self, message: messages.Message) -> None:
+        await self._dispatch(
+            self.channel_message_create(message.dest_type, str(message.dest_id)),
+            message.model_dump_api(),
+        )
+
+        if message.dest_type == messages.MessageDestinationType.DIRECT:
+            # notify author as well about the message creation
+            await self._dispatch(
+                self.channel_message_create(message.dest_type, str(message.author_id)),
+                message.model_dump_api(),
+            )
+
+    async def dispatch_message_update(self, message: messages.Message) -> None:
+        await self._dispatch(
+            self.channel_message_update(message.dest_type, str(message.dest_id)),
+            message.model_dump_api(),
+        )
+
+        if message.dest_type == messages.MessageDestinationType.DIRECT:
+            # notify author as well about the message creation
+            await self._dispatch(
+                self.channel_message_update(message.dest_type, str(message.author_id)),
+                message.model_dump_api(),
+            )
+
+    async def dispatch_message_delete(self, message: messages.Message) -> None:
+        await self._dispatch(
+            self.channel_message_delete(message.dest_type, str(message.dest_id)),
+            message.model_dump_api(),
+        )
+
+        if message.dest_type == messages.MessageDestinationType.DIRECT:
+            # notify author as well about the message deletion
+            await self._dispatch(
+                self.channel_message_delete(message.dest_type, str(message.author_id)),
+                message.model_dump_api(),
+            )
