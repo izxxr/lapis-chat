@@ -68,7 +68,7 @@ class ConnectionManager:
         for session_id in session_ids:
             conn = self._connections.get(session_id)
             if conn:
-                await conn.close(code=1000, close_ws=True)
+                await conn.close(code=1000)
 
         await self._cache.clear_user_session_ids(user_id)
 

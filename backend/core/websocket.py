@@ -74,7 +74,7 @@ class WSClient:
         while self._connected:
             await self._pubsub.get_message(ignore_subscribe_messages=True, timeout=None)
 
-    async def close(self, code: int = 1000, close_ws: bool = False) -> None:
+    async def close(self, code: int = 1000, close_ws: bool = True) -> None:
         """Closes the WebSocket connection.
 
         The underlying websocket connection is only attempted to be closed
@@ -105,7 +105,7 @@ class WSClient:
             while self._connected:
                 await self._ws.receive_text()
         except WebSocketDisconnect:
-            await self.close()
+            await self.close(close_ws=False)
 
     async def send(self, op: codes.OperationCode, d: Any = MISSING, t: Any = MISSING) -> None:
         """Sends a packet over WebSocket for given operation code with an optional data."""
