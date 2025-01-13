@@ -130,7 +130,7 @@ class DatabaseClient:
         """Creates a user."""
         await self.validate_user_username(create_data.username)
 
-        user_data = create_data.model_dump()
+        user_data = create_data.model_dump(exclude_defaults=True)
         user_data.update({
             "_id": uuid.uuid4(),
             "token": helpers.generate_token(),
