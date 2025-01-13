@@ -27,7 +27,7 @@ from core.typedefs import Request
 from core.deps import requires_auth_token
 from core.models import users as users_models
 from core.database import db_ctx
-from core import errcodes
+from core import codes
 
 __all__ = (
     "users",
@@ -46,7 +46,7 @@ async def get_authorized_user(data: users_models.GetAuthorizedUserJSONT) -> user
         user = await db.fetch_user_authorized(data.token)
 
     if user is None:
-        raise errcodes.INVALID_AUTHORIZATION.http_exc()
+        raise codes.INVALID_AUTHORIZATION.http_exc()
 
     return user
 
@@ -75,6 +75,6 @@ async def get_user(user_id: str) -> users_models.User:
     user = await db.fetch_user(user_id, authorized=False)
 
     if user is None:
-        raise errcodes.ENTITY_NOT_FOUND.http_exc("User not found.")
+        raise codes.ENTITY_NOT_FOUND.http_exc("User not found.")
 
     return user

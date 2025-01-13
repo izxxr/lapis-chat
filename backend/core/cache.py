@@ -76,8 +76,8 @@ class CacheManager:
 
     # --- Users by ID ---
 
-    def _scheme_user_id_integ(self, value: str):
-        return self._apply_scheme("user_id_integ", value)
+    def _scheme_user_id_integ(self, user_id: str):
+        return self._apply_scheme("user_id_integ", user_id)
 
     async def check_user_id_exists(self, user_id: str) -> bool | None:
         """Checks if the given user ID exists or not.
@@ -95,3 +95,41 @@ class CacheManager:
         """Sets existence status of a user ID."""
         key = self._scheme_user_id_integ(user_id)
         await self._redis.set(key, int(exists), xx=update, ex=300)
+
+    # --- Websocket Connections ---
+
+    def _scheme_user_sessions(self, user_id: str):
+        return self._apply_scheme("user_sessions", user_id)
+
+    async def get_user_sessions(self, user_id: str) -> list[str]:
+        """Get list of IDs of websocket sessions that user has."""
+        data = await self._redis.get(self._scheme_user_sessions(user_id))
+        if data is None:
+            return []
+        else:
+            return json.loads(data)
+
+    async def insert_user_session_id(self, user_id: str, session_id: str) -> None:
+        """Inserts a websocket session ID for the given user ID."""
+        session_ids = await self.get_user_sessions(user_id)
+        session_ids.append(session_id)
+        await self._redis.set(self._scheme_user_sessions(user_id), json.dumps(session_ids))
+
+    async def delete_user_session_id(self, user_id: str, session_id: str) -> bool:
+        """Deletes a websocket session ID from the user's session.
+        
+        Returns True if the operation was successful or False if no session
+        with that ID is stored.
+        """
+        session_ids = await self.get_user_sessions(user_id)
+        try:
+            session_ids.remove(session_id)
+        except ValueError:
+            return False
+        else:
+            await self._redis.set(self._scheme_user_sessions(user_id), json.dumps(session_ids))
+            return True
+
+    async def clear_user_session_ids(self, user_id: str) -> None:
+        """Removes all stored session IDs for given user."""
+        await self._redis.delete(self._scheme_user_sessions(user_id))

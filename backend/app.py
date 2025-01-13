@@ -23,9 +23,11 @@
 from core.app import app
 from routers.users import users
 from routers.friends import friends
+from routers.websocket import ws
 
 app.include_router(users)
 app.include_router(friends)
+app.include_router(ws)
 
 __all__ = (
     "app",

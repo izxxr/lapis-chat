@@ -28,7 +28,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from core.config import Config
 from core.cache import CacheManager
 from core.models import users, friends
-from core import helpers, errcodes
+from core.events import EventHandler
+from core.connections import ConnectionManager
+from core import helpers
+from core import codes
 
 import uuid
 import datetime
@@ -51,6 +54,8 @@ class DatabaseClient:
         self._mongodb = AsyncIOMotorClient[dict[str, Any]](Config.MONGODB_URI)
         self._cache = CacheManager()
         self._db = self._mongodb[Config.MONGODB_DATABASE_NAME]
+        self.events = EventHandler(self._cache)
+        self.connections = ConnectionManager(self)
 
     # Public methods
 
@@ -73,7 +78,7 @@ class DatabaseClient:
         """Ensures that the given username must not exist raising HTTP exception otherwise."""
         existing = await self._db.users.find_one({"username": username})
         if existing:
-            raise errcodes.USERNAME_TAKEN.http_exc()
+            raise codes.USERNAME_TAKEN.http_exc()
 
     async def validate_user_exists(self, user_id: str) -> None:
         """Ensures that the given user ID exists."""
@@ -82,7 +87,7 @@ class DatabaseClient:
             exists = await self._db.users.find_one({"_id": user_id})
             await self._cache.set_user_id_exists(user_id, exists is not None)
         if not exists:
-            raise errcodes.ENTITY_NOT_FOUND.http_exc("This user does not exist.")
+            raise codes.ENTITY_NOT_FOUND.http_exc("This user does not exist.")
 
     async def fetch_user(self, user_id: str, authorized: bool = False) -> users.User | users.AuthorizedUser | None:
         """Fetches the user from given ID.
@@ -147,6 +152,8 @@ class DatabaseClient:
 
         await self._cache.delete_user_by_token(deleted["token"])
         await self._cache.set_user_id_exists(user_id, False, update=True)
+        await self.connections.disconnect_user_connections(user_id)
+        await self.events.dispatch_user_delete(user_id)
 
     async def edit_user(self, user_id: str, data: users.EditAuthorizedUserJSON) -> users.AuthorizedUser:
         """Updates the user for given user ID."""
@@ -179,6 +186,7 @@ class DatabaseClient:
         user = users.AuthorizedUser(**user_data)
 
         await self._cache.set_user_by_token(user, update=update)
+        await self.events.dispatch_user_update(user)
         return user
 
     # -- Friends --
@@ -221,7 +229,7 @@ class DatabaseClient:
     async def unfriend_user(self, user_id: str, target_id: str) -> None:
         """Unfriends two users."""
         if user_id == target_id:
-            raise errcodes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
+            raise codes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
 
         query = {
             "$or": [
@@ -234,6 +242,7 @@ class DatabaseClient:
         # not coexist. However, delete_many() is safer in case that happens
         # for any reason.
         await self._db.friends.delete_many(query)
+        await self.events.dispatch_friend_delete(user_id, target_id)
 
     # -- Friend Requests --
 
@@ -283,7 +292,7 @@ class DatabaseClient:
         The first user ID is considered as operating user's ID.
         """
         if user_id == target_id:
-            raise errcodes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
+            raise codes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
 
         incoming_request = await self.fetch_friend_request(target_id, user_id)
 
@@ -291,7 +300,7 @@ class DatabaseClient:
             # sending a request
             friendship_exists = await self.fetch_friend(user_id, target_id)
             if friendship_exists:
-                raise errcodes.USER_ALREADY_FRIEND.http_exc()
+                raise codes.USER_ALREADY_FRIEND.http_exc()
 
             await self.validate_user_exists(target_id)
             request_data: dict[str, Any] = {
@@ -304,8 +313,9 @@ class DatabaseClient:
             try:
                 await self._db.friend_requests.insert_one(request_data)
             except pymongo.errors.DuplicateKeyError:
-                raise errcodes.FRIEND_REQUEST_ALREADY_SENT.http_exc()
+                raise codes.FRIEND_REQUEST_ALREADY_SENT.http_exc()
 
+            await self.events.dispatch_friend_request_receive(friends.FriendRequest(**request_data, operating_user_id=user_id))
             return True
         else:
             # accepting the request
@@ -318,6 +328,7 @@ class DatabaseClient:
             }
             await self.delete_friend_request(target_id, user_id)
             await self._db.friends.insert_one(friend_data)
+            await self.events.dispatch_friend_create(user_id, target_id)
             return False
 
     async def withdraw_reject_friend_request(self, user_id: str, target_id: str) -> bool:
@@ -328,7 +339,7 @@ class DatabaseClient:
         404 if no request was found for the given user.
         """
         if user_id == target_id:
-            raise errcodes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
+            raise codes.REQUESTER_RECIPIENT_ID_EQUAL.http_exc()
 
         incoming_request = await self.fetch_friend_request(target_id, user_id)
 
@@ -344,7 +355,7 @@ class DatabaseClient:
             await self.delete_friend_request(user_id, target_id)
             return True
         
-        raise errcodes.ENTITY_NOT_FOUND.http_exc("No incoming or outgoing request found for this user.")
+        raise codes.ENTITY_NOT_FOUND.http_exc("No incoming or outgoing request found for this user.")
 
 db_ctx: ContextVar[DatabaseClient] = ContextVar("db", default=DatabaseClient())
 """Context variable for managing global database client instance."""

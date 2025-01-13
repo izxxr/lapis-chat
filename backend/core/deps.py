@@ -26,7 +26,7 @@ from typing import Annotated
 from fastapi import Depends, Header
 from core.typedefs import Request
 from core.database import db_ctx
-from core import errcodes
+from core import codes
 
 __all__ = (
     "requires_auth_token",
@@ -38,7 +38,7 @@ async def _requires_auth_token_dep(request: Request, authorization: Annotated[st
     user = await db.fetch_user_authorized(authorization)
 
     if user is None:
-        raise errcodes.INVALID_AUTHORIZATION.http_exc()
+        raise codes.INVALID_AUTHORIZATION.http_exc()
 
     request.state.current_user = user
 

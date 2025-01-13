@@ -56,19 +56,26 @@ class Friend(BaseDatabaseModel):
     operating_user_id: str | None = Field(default=None, exclude=True)
     """The ID of user who requested this object from API."""
 
-    def model_dump_api(self, **kwargs: Any) -> dict[str, Any]:
-        if self.operating_user_id:
-            if self.operating_user_id == str(self.id.first_user):
-                user_id = self.id.second_user
-            elif self.operating_user_id == str(self.id.second_user):
-                user_id = self.id.first_user
+    @property
+    def friend_id(self) -> str:
+        """The ID of friend w.r.t. operating user ID."""
+        op_id = self.operating_user_id
+
+        if op_id:
+            first_user_id = str(self.id.first_user)
+            second_user_id = str(self.id.second_user)
+            if op_id == first_user_id:
+                return second_user_id
+            elif op_id == second_user_id:
+                return first_user_id
             else:
                 raise RuntimeError("operating_user_id is invalid")
         else:
-            raise RuntimeError("model_dump_api() requires operating_user_id specified.")
+            raise RuntimeError("Operation requires operating_user_id specified.")
 
+    def model_dump_api(self, **kwargs: Any) -> dict[str, Any]:
         data: dict[str, Any] = {
-            "user_id": user_id,
+            "user_id": self.friend_id,
             "created_at": self.created_at.isoformat()
         }
         return data
